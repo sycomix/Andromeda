@@ -192,10 +192,7 @@ def _bwd_kernel(
     DK += off_z * stride_qz + off_h * stride_qh
     DV += off_z * stride_qz + off_h * stride_qh
     for start_n in range(0, num_block):
-        if CAUSAL:
-            lo = start_n * BLOCK_M
-        else:
-            lo = 0
+        lo = start_n * BLOCK_M if CAUSAL else 0
         # initialize row/col offsets
         offs_qm = lo + tl.arange(0, BLOCK_M)
         offs_n = start_n * BLOCK_M + tl.arange(0, BLOCK_M)
@@ -223,9 +220,7 @@ def _bwd_kernel(
             q = tl.load(q_ptrs)
             # recompute p = softmax(qk, dim=-1).T
             if CAUSAL:
-                qk = tl.where(
-                    offs_m_curr[:, None] >= (offs_n[None, :]), float(0.0), float("-inf")
-                )
+                qk = tl.where(offs_m_curr[:, None] >= (offs_n[None, :]), 0.0, float("-inf"))
             else:
                 qk = tl.zeros([BLOCK_M, BLOCK_N], dtype=tl.float32)
             qk += tl.dot(q, tl.trans(k))
@@ -268,7 +263,7 @@ class _attention(torch.autograd.Function):
     ):
         # shape constraints
         Lq, Lk, Lv = q.shape[-1], k.shape[-1], v.shape[-1]
-        assert Lq == Lk and Lk == Lv
+        assert Lq == Lk == Lv
         assert Lk in {16, 32, 64, 128}
         o = torch.empty_like(q)
         BLOCK_M = 128

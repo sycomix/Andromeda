@@ -58,13 +58,12 @@ class Tokenizer:
 
         # Downloading the tokenizer model file
         response = requests.get(model_url)
-        if response.status_code == 200:
-            with open(model_path, "wb") as file:
-                file.write(response.content)
-            logger.info(f"Downloaded SentencePiece model to {model_path}")
-        else:
+        if response.status_code != 200:
             raise Exception(f"Failed to download model from {model_url}")
 
+        with open(model_path, "wb") as file:
+            file.write(response.content)
+        logger.info(f"Downloaded SentencePiece model to {model_path}")
         return model_path
 
     def encode(self, s: str) -> [int]:

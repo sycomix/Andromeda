@@ -184,22 +184,18 @@ def fsdp(
         )
     else:
         raise ValueError(
-            "Invalid scheduler_type. Expected 'bf16', 'fp16' or 'fp32', got: {}".format(
-                mp
-            )
+            f"Invalid scheduler_type. Expected 'bf16', 'fp16' or 'fp32', got: {mp}"
         )
 
-    if shard_strat == "SHARD_GRAD":
-        sharding_strat_fsdp = ShardingStrategy.SHARD_GRAD_OP
-    elif shard_strat == "FULL_SHARD":
+    if shard_strat == "FULL_SHARD":
         sharding_strat_fsdp = ShardingStrategy.FULL_SHARD
     elif shard_strat == "NO_SHARD":
         sharding_strat_fsdp = ShardingStrategy.NO_SHARD
+    elif shard_strat == "SHARD_GRAD":
+        sharding_strat_fsdp = ShardingStrategy.SHARD_GRAD_OP
     else:
         raise ValueError(
-            "Invalid scheduler_type. Expected 'SHARD_GRAD', 'FULL_SHARD' or 'NO_SHARD', got: {}".format(
-                shard_strat
-            )
+            f"Invalid scheduler_type. Expected 'SHARD_GRAD', 'FULL_SHARD' or 'NO_SHARD', got: {shard_strat}"
         )
 
     model = FullyShardedDataParallel(
@@ -247,23 +243,21 @@ def get_lr_scheduler_with_warmup(
     GRADIENT_ACCUMULATE_EVERY = grad_accumulate_every
     if accelerator is not None:
         accelerator.print(f"Using {scheduler_type} lr scheduler")
-    if scheduler_type == "linear":
-        return get_linear_schedule_with_warmup(
+    if scheduler_type == "cosine":
+        return get_cosine_schedule_with_warmup(
             optimizer=optimizer,
             num_warmup_steps=NUM_WARMUP_STEPS * GRADIENT_ACCUMULATE_EVERY,
             num_training_steps=max_train_steps * GRADIENT_ACCUMULATE_EVERY,
         )
-    elif scheduler_type == "cosine":
-        return get_cosine_schedule_with_warmup(
+    elif scheduler_type == "linear":
+        return get_linear_schedule_with_warmup(
             optimizer=optimizer,
             num_warmup_steps=NUM_WARMUP_STEPS * GRADIENT_ACCUMULATE_EVERY,
             num_training_steps=max_train_steps * GRADIENT_ACCUMULATE_EVERY,
         )
     else:
         raise ValueError(
-            "Invalid scheduler_type. Expected 'linear' or 'cosine', got: {}".format(
-                scheduler_type
-            )
+            f"Invalid scheduler_type. Expected 'linear' or 'cosine', got: {scheduler_type}"
         )
 
 
@@ -304,22 +298,13 @@ def decoupled_optimizer(
         ValueError: If the optimizer type is not 'lion', 'adamw' or 'stable_adamw'.
     """
     accelerator.print(f"Using {optimizer_type} optimizer")
-    # Create an empty dictionary called param_dict to store the model's named parameters.
-    param_dict = {}
-    # Iterate over the model's named parameters and populate the param_dict with key-value pairs.
-    for param_name, param in model.named_parameters():
-        param_dict[param_name] = param
-
+    param_dict = dict(model.named_parameters())
     # Separate the model's named modules into two groups: decay and no_decay.
 
     # Create an empty list to store the names of the LayerNorm and Embedding layer weights with no weight decay.
     no_decay = []
 
-    if use_fsdp:
-        exclude_module = "_fsdp_wrapped_module.token_emb"
-    else:
-        exclude_module = "token_emb"
-
+    exclude_module = "_fsdp_wrapped_module.token_emb" if use_fsdp else "token_emb"
     # Iterate through the named modules of the model.
     for module_name, module in model.named_modules():
         # Check if the current module is an instance of any of the desired types (LayerNorm or torch.nn.Embedding).
@@ -347,26 +332,12 @@ def decoupled_optimizer(
                 # Exit the inner loop since the desired module has been found.
                 break
 
-    # Create two separate lists of model parameters: decay_param and no_decay_param.
-    # The decay_param list contains the parameters that should have weight decay applied.
-    # The no_decay_param list contains the parameters that should not have weight decay applied, excluding the 'to_logits.weight' parameter.
-
-    # Create an empty list called decay_param to store the parameters with weight decay.
-    decay_param = []
-
     if use_fsdp:
         exclude_param = "_fsdp_wrapped_module.to_logits.weight"
     else:
         exclude_param = "to_logits.weight"
 
-    # Iterate over the decay list, which contains the names of the parameters with weight decay.
-    for param in decay:
-        # Check if the current parameter is not 'to_logits.weight'.
-        # Append the corresponding parameter from param_dict to the decay_param list.
-
-        if param != exclude_param:
-            decay_param.append(param_dict[param])
-
+    decay_param = [param_dict[param] for param in decay if param != exclude_param]
     # Create an empty list called no_decay_param to store the parameters without weight decay.
     no_decay_param = []
 
@@ -388,13 +359,7 @@ def decoupled_optimizer(
     ]
 
     # Create a variable called optimizer that stores an instance of the optimizer.
-    if optimizer_type == "lion":
-        optimizer = Lion(
-            grouped_params,
-            lr=learning_rate,
-            betas=(beta_1, beta_2),
-        )
-    elif optimizer_type == "adamw":
+    if optimizer_type == "adamw":
         optimizer = AdamW(
             grouped_params,
             lr=learning_rate,
@@ -406,21 +371,21 @@ def decoupled_optimizer(
             lr=learning_rate,
             betas=(beta_1, beta_2),
         )
+    elif optimizer_type == "lion":
+        optimizer = Lion(
+            grouped_params,
+            lr=learning_rate,
+            betas=(beta_1, beta_2),
+        )
     elif optimizer_type == "stable_adamw":
         optimizer = StableAdamWUnfused(
             grouped_params,
             lr=learning_rate,
             betas=(beta_1, beta_2),
         )
-    # elif optimizer_type=="Adam8bit":
-    #     optimizer = bnb.optim.Adam8bit(grouped_params, lr=learning_rate, betas=(beta_1, beta_2))
-    # elif optimizer_type=="Lion8Bit":
-    #     optimizer = bnb.optim.Lion8bit(grouped_params, lr=learning_rate, betas=(beta_1, beta_2))
     else:
         raise ValueError(
-            "Invalid optimizer_type. Expected 'lion', 'adamw', 'deepspeed' or 'stable_adamw', got: {}".format(
-                optimizer_type
-            )
+            f"Invalid optimizer_type. Expected 'lion', 'adamw', 'deepspeed' or 'stable_adamw', got: {optimizer_type}"
         )
 
     # Return the optimizer.
@@ -482,13 +447,9 @@ def build_dataloaders():
 
 # switch to falconwebdataset
 def build_pre_tokenized():
-    d0 = load_dataset("conceptofmind/c4_0-to-20_neox_with_eos_8k", split="train[:10]")
-    # d1 = load_dataset("conceptofmind/c4_21-to-40_neox_with_eos_8k", split="train")
-    # d2 = load_dataset("conceptofmind/c4_41-to-60_neox_with_eos_8k", split="train")
-    # d3 = load_dataset("conceptofmind/c4_61-to-80_neox_with_eos_8k", split="train")
-    # d4 = load_dataset("conceptofmind/c4_81-to-100_neox_with_eos_8k", split="train")
-    # train_dataset = concatenate_datasets([d0, d1, d2, d3, d4])
-    return d0
+    return load_dataset(
+        "conceptofmind/c4_0-to-20_neox_with_eos_8k", split="train[:10]"
+    )
 
 
 def Train():

@@ -36,10 +36,7 @@ def main():
 
     args = parser.parse_args()
 
-    dtype = torch.float32
-    if args.dtype == "bf16":
-        dtype = torch.bfloat16
-
+    dtype = torch.bfloat16 if args.dtype == "bf16" else torch.float32
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # need to submit to torch hub
@@ -62,9 +59,7 @@ def main():
         use_tqdm=True,
     )
 
-    decoded_output = tokenizer.batch_decode(output_tensor, skip_special_tokens=True)
-
-    return decoded_output
+    return tokenizer.batch_decode(output_tensor, skip_special_tokens=True)
 
 
 if __name__ == "__main__":

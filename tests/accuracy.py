@@ -42,8 +42,7 @@ class AccuracyMetrics:
         return corpus_bleu(references, hypotheses)
 
     def calculate_rouge(self, references, hypotheses):
-        scores = self.rouge.get_scores(hypotheses, references, avg=True)
-        return scores
+        return self.rouge.get_scores(hypotheses, references, avg=True)
 
     def calculate_f1(self, true_labels, pred_labels):
         return f1_score(true_labels, pred_labels, average="weighted")
