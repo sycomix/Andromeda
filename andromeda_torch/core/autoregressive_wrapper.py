@@ -150,7 +150,4 @@ class AutoregressiveWrapper(nn.Module):
             rearrange(logits, "b n c -> b c n"), target, ignore_index=ignore_index
         )
 
-        if return_loss:
-            return logits, loss
-
-        return logits
+        return (logits, loss) if return_loss else logits

@@ -49,9 +49,7 @@ def divisible_by(num, den):
 def maybe(fn):
     @wraps(fn)
     def inner(x, *args, **kwargs):
-        if not exists(x):
-            return x
-        return fn(x, *args, **kwargs)
+        return x if not exists(x) else fn(x, *args, **kwargs)
 
     return inner
 
@@ -413,8 +411,7 @@ class DynamicPositionBias(nn.Module):
 
         # get position biases
         bias = pos[indices]
-        bias = rearrange(bias, "i j h -> h i j")
-        return bias
+        return rearrange(bias, "i j h -> h i j")
 
 
 class AlibiPositionalBias(nn.Module):
@@ -431,10 +428,9 @@ class AlibiPositionalBias(nn.Module):
     def get_bias(self, i, j, device):
         i_arange = torch.arange(j - i, j, device=device)
         j_arange = torch.arange(j, device=device)
-        bias = -torch.abs(
+        return -torch.abs(
             rearrange(j_arange, "j -> 1 1 j") - rearrange(i_arange, "i -> 1 i 1")
         )
-        return bias
 
     @staticmethod
     def _get_slopes(heads):
@@ -449,7 +445,7 @@ class AlibiPositionalBias(nn.Module):
         closest_power_of_2 = 2 ** math.floor(math.log2(heads))
         return (
             get_slopes_power_of_2(closest_power_of_2)
-            + get_slopes_power_of_2(2 * closest_power_of_2)[0::2][
+            + get_slopes_power_of_2(2 * closest_power_of_2)[::2][
                 : heads - closest_power_of_2
             ]
         )
@@ -951,8 +947,6 @@ class Attention(nn.Module):
 
         max_neg_value(q)
         masks = []
-        final_attn_mask = None
-
         if exists(input_mask):
             input_mask = rearrange(input_mask, "b j -> b 1 1 j")
             masks.append(~input_mask)
@@ -976,15 +970,8 @@ class Attention(nn.Module):
             max_attend_past_mask = dist > self.max_attend_past
             masks.append(max_attend_past_mask)
 
-        if len(masks) > 0:
-            final_attn_mask = ~or_reduce(masks)
-
-        # prepare relative positional bias, if needed
-
-        attn_bias = None
-        if exists(rel_pos):
-            attn_bias = rel_pos(i, j)
-
+        final_attn_mask = ~or_reduce(masks) if masks else None
+        attn_bias = rel_pos(i, j) if exists(rel_pos) else None
         # attention is all we need
 
         out, intermediates = self.attend(
@@ -1199,7 +1186,7 @@ class AttentionLayers(nn.Module):
 
         if cross_attend and not only_cross:
             default_block = ("a", "c", "f")
-        elif cross_attend and only_cross:
+        elif cross_attend:
             default_block = ("c", "f")
         else:
             default_block = ("a", "f")
@@ -1350,7 +1337,7 @@ class AttentionLayers(nn.Module):
                     hiddens.append(x)
                 layer_mem = mems.pop(0) if mems else None
 
-            if layer_type == "c":
+            elif layer_type == "c":
                 if self.training and self.cross_attn_tokens_dropout > 0.0:
                     context, context_mask = dropout_seq(
                         context, context_mask, self.cross_attn_tokens_dropout
@@ -1541,7 +1528,7 @@ class Transformer(nn.Module):
         self.l2norm_embed = l2norm_embed
         self.token_emb = TokenEmbedding(emb_dim, num_tokens, l2norm_embed=l2norm_embed)
 
-        if not (use_abs_pos_emb and not attn_layers.has_pos_emb):
+        if not use_abs_pos_emb or attn_layers.has_pos_emb:
             self.pos_emb = always(0)
         elif scaled_sinu_pos_emb:
             self.pos_emb = ScaledSinusoidalEmbedding(emb_dim)

@@ -71,8 +71,7 @@ def create_causal_mask(i, j, device):
 def onnx_create_causal_mask(i, j, device):
     r = torch.arange(i, device=device)
     causal_mask = rearrange(r, "i -> i 1") < rearrange(r, "j -> 1 j")
-    causal_mask = F.pad(causal_mask, (j - i, 0), value=False)
-    return causal_mask
+    return F.pad(causal_mask, (j - i, 0), value=False)
 
 
 # main class

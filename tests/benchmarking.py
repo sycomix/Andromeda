@@ -119,10 +119,11 @@ class ConsistencyMetrics:
             outputs_list.append(outputs.detach().numpy())
 
         initial_output = outputs_list[0]
-        consistency_score = 0
-        for output in outputs_list[1:]:
-            if np.array_equal(initial_output, output):
-                consistency_score += 1
+        consistency_score = sum(
+            1
+            for output in outputs_list[1:]
+            if np.array_equal(initial_output, output)
+        )
         consistency_score = consistency_score / len(outputs_list) * 100
 
         return consistency_times, consistency_score
